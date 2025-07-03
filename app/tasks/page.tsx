@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,50 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Calendar, User, List, LayoutGrid, GripVertical } from "lucide-react"
 import { TopNavigation } from "@/components/top-navigation"
+import { tasksApi } from "@/lib/api/tasks"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
-// Mock data
-const mockTasks = [
-  {
-    id: 1,
-    title: "Design new landing page",
-    description: "Create mockups for the new product landing page",
-    assignee: "Alice Johnson",
-    priority: "high",
-    status: "todo",
-    dueDate: "2024-01-15",
-    tags: ["design", "frontend"],
-  },
-  {
-    id: 2,
-    title: "Implement user authentication",
-    description: "Set up login/signup flow with Supabase",
-    assignee: "Bob Smith",
-    priority: "high",
-    status: "in-progress",
-    dueDate: "2024-01-12",
-    tags: ["backend", "auth"],
-  },
-  {
-    id: 3,
-    title: "Write API documentation",
-    description: "Document all API endpoints for the mobile team",
-    assignee: "Carol Davis",
-    priority: "medium",
-    status: "in-progress",
-    dueDate: "2024-01-18",
-    tags: ["docs", "api"],
-  },
-  {
-    id: 4,
-    title: "Set up CI/CD pipeline",
-    description: "Configure automated testing and deployment",
-    assignee: "David Wilson",
-    priority: "medium",
-    status: "done",
-    dueDate: "2024-01-10",
-    tags: ["devops", "automation"],
-  },
-]
 
 const statusColumns = [
   { id: "todo", title: "To Do", color: "bg-gray-100" },
@@ -67,10 +27,12 @@ const statusColumns = [
 ]
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState(mockTasks)
+  const { user } = useAuth()
+  const [tasks, setTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [view, setView] = useState<"kanban" | "list">("kanban")
   const [isAddingTask, setIsAddingTask] = useState(false)
-  const [draggedTask, setDraggedTask] = useState<number | null>(null)
+  const [draggedTask, setDraggedTask] = useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
   const [newTask, setNewTask] = useState({
     title: "",
@@ -79,33 +41,65 @@ export default function TasksPage() {
     priority: "medium",
     dueDate: "",
   })
+  const [users, setUsers] = useState<any[]>([])
+  const supabase = createClientComponentClient()
 
-  const handleAddTask = () => {
-    if (!newTask.title.trim()) return
-
-    const task = {
-      id: tasks.length + 1,
-      ...newTask,
-      status: "todo",
-      tags: [],
+  useEffect(() => {
+    const fetchTasks = async () => {
+      setLoading(true)
+      try {
+        const data = await tasksApi.getTasks()
+        setTasks(data)
+      } catch (err) {
+      }
+      setLoading(false)
     }
+    fetchTasks()
+  }, [])
 
-    setTasks([...tasks, task])
-    setNewTask({
-      title: "",
-      description: "",
-      assignee: "",
-      priority: "medium",
-      dueDate: "",
-    })
-    setIsAddingTask(false)
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const { data, error } = await supabase.from("users").select("*")
+      if (!error) setUsers(data)
+    }
+    fetchUsers()
+  }, [])
+
+  const handleAddTask = async () => {
+    if (!newTask.title.trim() || !user) return
+    try {
+      const created = await tasksApi.createTask(
+        {
+          title: newTask.title,
+          description: newTask.description,
+          priority: newTask.priority,
+          assignedTo: newTask.assignee,
+          dueDate: newTask.dueDate,
+        },
+        user.id
+      )
+      setTasks([...tasks, created])
+      setNewTask({
+        title: "",
+        description: "",
+        assignee: "",
+        priority: "medium",
+        dueDate: "",
+      })
+      setIsAddingTask(false)
+    } catch (err) {
+    }
   }
 
-  const moveTask = (taskId: number, newStatus: string) => {
-    setTasks(tasks.map((task) => (task.id === taskId ? { ...task, status: newStatus } : task)))
+  const moveTask = async (taskId: string, newStatus: string) => {
+    try {
+      const updated = await tasksApi.updateTask(taskId, { status: newStatus })
+      setTasks(tasks.map((task) => (task.id === taskId ? updated : task)))
+    } catch (err) {
+    }
   }
 
-  const handleDragStart = (e: React.DragEvent, taskId: number) => {
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
     setDraggedTask(taskId)
     e.dataTransfer.effectAllowed = "move"
   }
@@ -125,20 +119,18 @@ export default function TasksPage() {
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
-    // Only clear drag over if we're leaving the column entirely
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const x = e.clientX
     const y = e.clientY
-
     if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
       setDragOverColumn(null)
     }
   }
 
-  const handleDrop = (e: React.DragEvent, columnId: string) => {
+  const handleDrop = async (e: React.DragEvent, columnId: string) => {
     e.preventDefault()
     if (draggedTask !== null) {
-      moveTask(draggedTask, columnId)
+      await moveTask(draggedTask, columnId)
     }
     setDraggedTask(null)
     setDragOverColumn(null)
@@ -157,7 +149,7 @@ export default function TasksPage() {
     }
   }
 
-  const TaskCard = ({ task }: { task: (typeof mockTasks)[0] }) => (
+  const TaskCard = ({ task }: { task: any }) => (
     <Card
       className={`mb-3 cursor-grab hover:shadow-md transition-all duration-200 ${
         draggedTask === task.id ? "opacity-50 rotate-2 scale-105" : ""
@@ -184,21 +176,20 @@ export default function TasksPage() {
             <div className="flex items-center gap-2">
               <Avatar className="h-5 w-5 md:h-6 md:w-6">
                 <AvatarFallback className="text-xs">
-                  {task.assignee
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
+                  {task.assigned_user?.name
+                    ? task.assigned_user.name.split(" ").map((n: string) => n[0]).join("")
+                    : "--"}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-xs text-muted-foreground truncate">{task.assignee}</span>
+              <span className="text-xs text-muted-foreground truncate">{task.assigned_user?.name || "Unassigned"}</span>
             </div>
 
-            {task.dueDate && (
+            {task.due_date && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Calendar className="h-3 w-3" />
-                <span className="hidden sm:inline">{new Date(task.dueDate).toLocaleDateString()}</span>
+                <span className="hidden sm:inline">{new Date(task.due_date).toLocaleDateString()}</span>
                 <span className="sm:hidden">
-                  {new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  {new Date(task.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                 </span>
               </div>
             )}
@@ -297,10 +288,9 @@ export default function TasksPage() {
                             <SelectValue placeholder="Select assignee" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Alice Johnson">Alice Johnson</SelectItem>
-                            <SelectItem value="Bob Smith">Bob Smith</SelectItem>
-                            <SelectItem value="Carol Davis">Carol Davis</SelectItem>
-                            <SelectItem value="David Wilson">David Wilson</SelectItem>
+                            {users.map((u) => (
+                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -404,16 +394,15 @@ export default function TasksPage() {
                           <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">{task.description}</p>
                         )}
                       </div>
-
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <User className="h-3 w-3 md:h-4 md:w-4" />
-                          <span className="truncate">{task.assignee}</span>
+                          <span className="truncate">{task.assigned_user?.name || "Unassigned"}</span>
                         </div>
-                        {task.dueDate && (
+                        {task.due_date && (
                           <div className="flex items-center gap-2">
                             <Calendar className="h-3 w-3 md:h-4 md:w-4" />
-                            <span className="whitespace-nowrap">{new Date(task.dueDate).toLocaleDateString()}</span>
+                            <span className="whitespace-nowrap">{new Date(task.due_date).toLocaleDateString()}</span>
                           </div>
                         )}
                       </div>

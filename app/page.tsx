@@ -5,42 +5,50 @@ import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, MessageSquare, Video, CheckSquare, Calendar, Users, TrendingUp } from "lucide-react"
+import { Plus, CheckSquare, Calendar, Users, TrendingUp, FileText } from "lucide-react"
 import Link from "next/link"
 import { CreateBoardModal } from "@/components/create-board-modal"
 import { TopNavigation } from "@/components/top-navigation"
-
-const mockData = {
-  teamSummary: {
-    totalMembers: 8,
-    activeToday: 6,
-    tasksCompleted: 12,
-    meetingsToday: 3,
-  },
-  todaysTasks: [
-    { id: 1, title: "Review design mockups", assignee: "Alice", priority: "high", dueTime: "2:00 PM" },
-    { id: 2, title: "Update documentation", assignee: "Bob", priority: "medium", dueTime: "4:00 PM" },
-    { id: 3, title: "Client call preparation", assignee: "Carol", priority: "high", dueTime: "5:00 PM" },
-  ],
-  recentMeetings: [
-    { id: 1, title: "Daily Standup", date: "Today 9:00 AM", notes: "Discussed sprint progress and blockers" },
-    { id: 2, title: "Product Review", date: "Yesterday 3:00 PM", notes: "Reviewed Q4 roadmap priorities" },
-  ],
-  upcomingEvents: [
-    { id: 1, title: "Team Retrospective", time: "Tomorrow 10:00 AM", type: "meeting" },
-    { id: 2, title: "Project Deadline", time: "Friday", type: "deadline" },
-  ],
-}
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 export default function Dashboard() {
   const [showCreateBoardModal, setShowCreateBoardModal] = useState(false)
   const searchParams = useSearchParams()
+  const [users, setUsers] = useState<any[]>([])
+  const [tasks, setTasks] = useState<any[]>([])
+  const [documents, setDocuments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
     if (searchParams.get("showCreateBoard") === "true") {
       setShowCreateBoardModal(true)
     }
   }, [searchParams])
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      const { data: userData } = await supabase.from("users").select("*")
+      setUsers(userData || [])
+      const today = new Date().toISOString().split("T")[0]
+      const { data: taskData } = await supabase
+        .from("tasks")
+        .select("*, assigned_user:users!tasks_assigned_to_fkey(id, name)")
+        .limit(3)
+        // .gte("due_date", today)
+        // .lte("due_date", today)
+      setTasks(taskData || [])
+      const { data: docData } = await supabase
+        .from("documents")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(5)
+      setDocuments(docData || [])
+      setLoading(false)
+    }
+    fetchData()
+  }, [])
 
   return (
     <>
@@ -60,17 +68,9 @@ export default function Dashboard() {
                   <span className="sm:hidden">Add Task</span>
                 </Link>
               </Button>
-              {/* <Button variant="outline" asChild size="sm" className="w-full sm:w-auto bg-transparent">
-                <Link href="/meet">
-                  <Video className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">Start Meeting</span>
-                  <span className="sm:hidden">Meet</span>
-                </Link>
-              </Button> */}
             </div>
           </div>
 
-          {/* Team Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -78,8 +78,9 @@ export default function Dashboard() {
                 <Users className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-xl md:text-2xl font-bold">{mockData.teamSummary.totalMembers}</div>
-                <p className="text-xs text-muted-foreground">{mockData.teamSummary.activeToday} active today</p>
+                <div className="text-xl md:text-2xl font-bold">{users.length}</div>
+                <p className="text-xs text-muted-foreground">Total team members</p>
+                {/* <p className="text-xs text-muted-foreground">{users.filter((u) => u.status === "online").length} active today</p> */}
               </CardContent>
             </Card>
 
@@ -89,8 +90,8 @@ export default function Dashboard() {
                 <CheckSquare className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-xl md:text-2xl font-bold">{mockData.teamSummary.tasksCompleted}</div>
-                <p className="text-xs text-muted-foreground">+2 from yesterday</p>
+                <div className="text-xl md:text-2xl font-bold">{tasks.filter((t) => t.status === "done").length}</div>
+                <p className="text-xs text-muted-foreground">Today</p>
               </CardContent>
             </Card>
 
@@ -100,8 +101,8 @@ export default function Dashboard() {
                 <Calendar className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-xl md:text-2xl font-bold">{mockData.teamSummary.meetingsToday}</div>
-                <p className="text-xs text-muted-foreground">2 done, 1 upcoming</p>
+                <div className="text-xl md:text-2xl font-bold">-</div>
+                <p className="text-xs text-muted-foreground">No data</p>
               </CardContent>
             </Card>
 
@@ -111,14 +112,13 @@ export default function Dashboard() {
                 <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-xl md:text-2xl font-bold">94%</div>
-                <p className="text-xs text-muted-foreground">+5% from last week</p>
+                <div className="text-xl md:text-2xl font-bold">-</div>
+                <p className="text-xs text-muted-foreground">No data</p>
               </CardContent>
             </Card>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {/* Today's Tasks */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -128,57 +128,69 @@ export default function Dashboard() {
                 <CardDescription>Your team's focus for today</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {mockData.todaysTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm md:text-base truncate">{task.title}</p>
-                      <p className="text-xs md:text-sm text-muted-foreground">Assigned to {task.assignee}</p>
+                {tasks.length === 0 ? (
+                  <div className="text-muted-foreground">No tasks for today.</div>
+                ) : (
+                  tasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm md:text-base truncate">{task.title}</p>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          Assigned to {task.assigned_user?.name || "Unassigned"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant={task.priority === "high" ? "destructive" : "secondary"} className="text-xs">
+                          {task.priority}
+                        </Badge>
+                        <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">
+                          {task.due_date ? new Date(task.due_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Badge variant={task.priority === "high" ? "destructive" : "secondary"} className="text-xs">
-                        {task.priority}
-                      </Badge>
-                      <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">{task.dueTime}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
                 <Button variant="outline" className="w-full bg-transparent" asChild>
                   <Link href="/tasks">View All Tasks</Link>
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Recent Activity */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <MessageSquare className="h-4 w-4 md:h-5 md:w-5" />
-                  Recent Activity
+                  <FileText className="h-4 w-4 md:h-5 md:w-5" />
+                  Recent Documents
                 </CardTitle>
-                <CardDescription>Latest updates from your team</CardDescription>
+                <CardDescription>Latest docs from your team</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {mockData.recentMeetings.map((meeting) => (
-                  <div key={meeting.id} className="p-3 border rounded-lg">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
-                      <p className="font-medium text-sm md:text-base">{meeting.title}</p>
-                      <span className="text-xs md:text-sm text-muted-foreground">{meeting.date}</span>
+                {documents.length === 0 ? (
+                  <div className="text-muted-foreground">No documents found.</div>
+                ) : (
+                  documents.map((doc) => (
+                    <div key={doc.id} className="p-3 border rounded-lg">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
+                        <p className="font-medium text-sm md:text-base">{doc.title}</p>
+                        <span className="text-xs md:text-sm text-muted-foreground">
+                          {doc.created_at ? new Date(doc.created_at).toLocaleDateString() : ""}
+                        </span>
+                      </div>
+                      <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">{doc.content?.slice(0, 100)}...</p>
                     </div>
-                    <p className="text-xs md:text-sm text-muted-foreground">{meeting.notes}</p>
-                  </div>
-                ))}
+                  ))
+                )}
                 <Button variant="outline" className="w-full bg-transparent" asChild>
-                  <Link href="/docs">View Meeting Notes</Link>
+                  <Link href="/docs">View Documents</Link>
                 </Button>
               </CardContent>
             </Card>
           </div>
 
-          {/* Upcoming Events */}
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Calendar className="h-4 w-4 md:h-5 md:w-5" />
@@ -188,23 +200,12 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {mockData.upcomingEvents.map((event) => (
-                  <div key={event.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                    <div
-                      className={`h-3 w-3 rounded-full flex-shrink-0 ${event.type === "meeting" ? "bg-blue-500" : "bg-orange-500"}`}
-                    ></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm md:text-base truncate">{event.title}</p>
-                      <p className="text-xs md:text-sm text-muted-foreground">{event.time}</p>
-                    </div>
-                  </div>
-                ))}
+                 <div className="text-muted-foreground">(Connect events table for real data)</div>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
         </div>
 
-        {/* Create Board Modal */}
         <CreateBoardModal open={showCreateBoardModal} onOpenChange={setShowCreateBoardModal} />
       </main>
     </>

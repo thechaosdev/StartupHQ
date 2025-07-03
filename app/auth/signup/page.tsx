@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Building } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -25,66 +26,14 @@ export default function SignupPage() {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const router = useRouter()
   const { toast } = useToast()
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const supabase = createClientComponentClient();
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {}
-
-    if (!formData.name.trim()) {
-      newErrors.name = "Name is required"
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = "Email is required"
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email"
-    }
-
-    if (!formData.password) {
-      newErrors.password = "Password is required"
-    } else if (formData.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters"
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match"
-    }
-
-    if (!formData.agreeToTerms) {
-      newErrors.terms = "You must agree to the terms and conditions"
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!validateForm()) {
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      toast({
-        title: "Account created successfully!",
-        description: "Welcome to TeamSync. You can now create your first board.",
-      })
-
-      router.push("/?showCreateBoard=true")
-    } catch (err) {
-      setErrors({ general: "An error occurred. Please try again." })
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -100,6 +49,53 @@ export default function SignupPage() {
       })
     }
   }
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const name = formData.get("name") as string;
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    try {
+      const { data: signUpData, error: signUpError } =
+        await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name: name,
+            },
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+
+      if (signUpError) throw signUpError;
+
+      const { error: profileError } = await supabase.from("users").upsert({
+        id: signUpData.user?.id,
+        email,
+        name: name,
+        created_at: new Date().toISOString(),
+      });
+
+      if (profileError) throw profileError;
+
+      router.push("/?showCreateBoard=true")
+      router.push("/auth/login")
+    } catch (error) {
+      console.error("Signup error:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "An error occurred during signup"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
@@ -159,22 +155,6 @@ export default function SignupPage() {
                   />
                 </div>
                 {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="company">Company (Optional)</Label>
-                <div className="relative">
-                  <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    id="company"
-                    name="company"
-                    type="text"
-                    placeholder="Enter your company name"
-                    value={formData.company}
-                    onChange={handleInputChange}
-                    className="pl-10"
-                  />
-                </div>
               </div>
 
               <div className="space-y-2">

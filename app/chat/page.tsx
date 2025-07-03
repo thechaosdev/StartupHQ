@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,98 +12,127 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { TopNavigation } from "@/components/top-navigation"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { useAuth } from "@/lib/hooks/useAuth"
 
-// Mock data - in real app, this would come from Supabase real-time
-const mockChannels = [
-  { id: 1, name: "general", unread: 0, type: "channel" },
-  { id: 2, name: "development", unread: 3, type: "channel" },
-  { id: 3, name: "design", unread: 1, type: "channel" },
-  { id: 4, name: "Alice Johnson", unread: 2, type: "dm" },
-  { id: 5, name: "Bob Smith", unread: 0, type: "dm" },
-]
+// Real-time messages hook
+function useRealtimeMessages(channelId: string, supabase: any) {
+  const [messages, setMessages] = useState<any[]>([])
 
-const mockMessages = [
-  {
-    id: 1,
-    user: "Alice Johnson",
-    message: "Hey team! Just finished the new dashboard mockups. What do you think?",
-    timestamp: "10:30 AM",
-    initials: "AJ",
-  },
-  {
-    id: 2,
-    user: "Bob Smith",
-    message: "Looks great! The color scheme really works well with our brand.",
-    timestamp: "10:32 AM",
-    initials: "BS",
-  },
-  {
-    id: 3,
-    user: "Carol Davis",
-    message: "I agree! Can we schedule a quick call to discuss the user flow?",
-    timestamp: "10:35 AM",
-    initials: "CD",
-  },
-  {
-    id: 4,
-    user: "You",
-    message: "I'll create a meeting link in the Meet section.",
-    timestamp: "10:37 AM",
-    initials: "YU",
-  },
-]
+  useEffect(() => {
+    if (!channelId) return
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("channel_id", channelId)
+        .order("created_at", { ascending: true })
+        .limit(50) // Only fetch latest 50 messages
+      setMessages(data || [])
+    }
+    fetchMessages()
 
-const mockTeamMembers = [
-  { id: 1, name: "Alice Johnson", initials: "AJ", status: "online" },
-  { id: 2, name: "Bob Smith", initials: "BS", status: "online" },
-  { id: 3, name: "Carol Davis", initials: "CD", status: "away" },
-  { id: 4, name: "David Wilson", initials: "DW", status: "offline" },
-]
+    const channel = supabase
+      .channel("realtime:messages")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` },
+        (payload: { eventType: string; new: any }) => {
+          if (payload.eventType === "INSERT") {
+            setMessages((msgs) => [...msgs, payload.new])
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [channelId, supabase])
+
+  return messages
+}
 
 export default function ChatPage() {
-  const [selectedChannel, setSelectedChannel] = useState(mockChannels[0])
+  const supabase = createClientComponentClient()
+  const { user } = useAuth()
+  const [channels, setChannels] = useState<any[]>([])
+  const [selectedChannel, setSelectedChannel] = useState<any | null>(null)
   const [newMessage, setNewMessage] = useState("")
-  const [messages, setMessages] = useState(mockMessages)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false)
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
+  const [usersById, setUsersById] = useState<{ [key: string]: any }>({})
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
+  // Fetch channels for the user (efficient join)
   useEffect(() => {
-    scrollToBottom()
+    if (!user) return
+    const fetchChannels = async () => {
+      const { data, error } = await supabase
+        .from("channel_members")
+        .select("channel_id, channels(id, name, created_by, created_at)")
+        .eq("user_id", user.id)
+      if (error) {
+        setChannels([])
+        return
+      }
+      // Extract channels from the join result
+      const channelList = (data || [])
+        .map((cm: any) => cm.channels)
+        .filter(Boolean)
+      setChannels(channelList)
+      if (channelList.length > 0) setSelectedChannel(channelList[0])
+    }
+    fetchChannels()
+  }, [user])
+
+  // Fetch all users once and build a map for quick lookup
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const { data } = await supabase.from("users").select("id, name, status")
+      setTeamMembers(data || [])
+      const map: { [key: string]: any } = {}
+      data?.forEach((u: any) => { map[u.id] = u })
+      setUsersById(map)
+    }
+    fetchUsers()
+  }, [])
+
+  // Real-time messages for selected channel
+  const messages = useRealtimeMessages(selectedChannel?.id || "", supabase)
+
+  // Scroll to bottom on new message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  // Send message
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newMessage.trim()) return
-
-    const message = {
-      id: messages.length + 1,
-      user: "You",
-      message: newMessage,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      initials: "YU",
-    }
-
-    setMessages([...messages, message])
+    if (!newMessage.trim() || !user || !selectedChannel) return
+    await supabase.from("messages").insert({
+      channel_id: selectedChannel.id,
+      user_id: user.id,
+      content: newMessage,
+    })
     setNewMessage("")
   }
 
-  const handleChannelSelect = (channel: (typeof mockChannels)[0]) => {
+  // Channel select
+  const handleChannelSelect = (channel: any) => {
     setSelectedChannel(channel)
     setIsMobileMenuOpen(false)
   }
 
+  // Create channel form
   const CreateChannelForm = ({ onSuccess, onCancel }: { onSuccess: (channel: any) => void; onCancel: () => void }) => {
     const [formData, setFormData] = useState({
       name: "",
-      selectedMembers: [] as number[],
+      selectedMembers: [] as string[],
     })
 
-    const handleMemberToggle = (memberId: number) => {
+    const handleMemberToggle = (memberId: string) => {
       setFormData((prev) => ({
         ...prev,
         selectedMembers: prev.selectedMembers.includes(memberId)
@@ -113,24 +141,22 @@ export default function ChatPage() {
       }))
     }
 
-    const handleSubmit = () => {
-      if (!formData.name.trim()) return
-
-      const channel = {
-        id: mockChannels.length + 1,
-        name: formData.name,
-        unread: 0,
-        type: "channel" as const,
-        members: formData.selectedMembers,
-      }
-
-      onSuccess(channel)
-
-      // Reset form
-      setFormData({
-        name: "",
-        selectedMembers: [],
-      })
+    const handleSubmit = async () => {
+      if (!formData.name.trim() || !user) return
+      // 1. Create channel
+      const { data: channelData, error } = await supabase
+        .from("channels")
+        .insert({ name: formData.name, created_by: user.id })
+        .select()
+        .single()
+      if (error || !channelData) return
+      // 2. Add members (including creator)
+      const memberIds = Array.from(new Set([...formData.selectedMembers, user.id]))
+      await supabase.from("channel_members").insert(
+        memberIds.map((uid) => ({ channel_id: channelData.id, user_id: uid }))
+      )
+      onSuccess(channelData)
+      setFormData({ name: "", selectedMembers: [] })
     }
 
     return (
@@ -149,7 +175,7 @@ export default function ChatPage() {
           <Label>Team Members</Label>
           <p className="text-sm text-muted-foreground mb-3">Select members to add to this channel</p>
           <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
-            {mockTeamMembers.map((member) => {
+            {teamMembers.map((member) => {
               const isSelected = formData.selectedMembers.includes(member.id)
               return (
                 <div
@@ -161,7 +187,9 @@ export default function ChatPage() {
                 >
                   <div className="relative">
                     <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs">{member.initials}</AvatarFallback>
+                      <AvatarFallback className="text-xs">
+                        {member.name.split(" ").map((n: string) => n[0]).join("")}
+                      </AvatarFallback>
                     </Avatar>
                     <div
                       className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-white ${
@@ -197,7 +225,7 @@ export default function ChatPage() {
               <p className="text-sm font-medium mb-2">Selected members ({formData.selectedMembers.length}):</p>
               <div className="flex flex-wrap gap-1">
                 {formData.selectedMembers.map((memberId) => {
-                  const member = mockTeamMembers.find((m) => m.id === memberId)
+                  const member = teamMembers.find((m) => m.id === memberId)
                   return member ? (
                     <Badge key={memberId} variant="secondary" className="text-xs">
                       {member.name}
@@ -238,8 +266,7 @@ export default function ChatPage() {
               </DialogHeader>
               <CreateChannelForm
                 onSuccess={(channel) => {
-                  // In a real app, you'd add this to your channels state
-                  console.log("New channel created:", channel)
+                  setChannels((prev) => [...prev, channel])
                   setIsCreateChannelOpen(false)
                 }}
                 onCancel={() => setIsCreateChannelOpen(false)}
@@ -251,25 +278,16 @@ export default function ChatPage() {
 
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
-          {mockChannels.map((channel) => (
+          {channels.map((channel) => (
             <button
               key={channel.id}
               onClick={() => handleChannelSelect(channel)}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-left hover:bg-accent transition-colors ${
-                selectedChannel.id === channel.id ? "bg-accent" : ""
+                selectedChannel?.id === channel.id ? "bg-accent" : ""
               }`}
             >
-              {channel.type === "channel" ? (
-                <Hash className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <Users className="h-4 w-4 text-muted-foreground" />
-              )}
+              <Hash className="h-4 w-4 text-muted-foreground" />
               <span className="flex-1 truncate text-sm">{channel.name}</span>
-              {channel.unread > 0 && (
-                <Badge variant="destructive" className="h-5 w-5 p-0 flex items-center justify-center text-xs">
-                  {channel.unread}
-                </Badge>
-              )}
             </button>
           ))}
         </div>
@@ -307,12 +325,8 @@ export default function ChatPage() {
                   </SheetTrigger>
                 </Sheet>
 
-                {selectedChannel.type === "channel" ? (
-                  <Hash className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
-                ) : (
-                  <Users className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
-                )}
-                <h1 className="font-semibold text-sm md:text-base truncate">{selectedChannel.name}</h1>
+                <Hash className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
+                <h1 className="font-semibold text-sm md:text-base truncate">{selectedChannel?.name}</h1>
                 <Badge variant="secondary" className="ml-auto text-xs">
                   {messages.length} messages
                 </Badge>
@@ -322,32 +336,41 @@ export default function ChatPage() {
             {/* Messages */}
             <ScrollArea className="flex-1 p-3 md:p-4">
               <div className="space-y-3 md:space-y-4">
-                {messages.map((message) => (
-                  <div key={message.id} className={`mb-4 ${message.user === "You" ? "text-right" : "text-left"}`}>
-                    <div className={`flex gap-2 md:gap-3 ${message.user === "You" ? "flex-row-reverse" : ""}`}>
-                      <Avatar className="h-6 w-6 md:h-8 md:w-8 flex-shrink-0">
-                        <AvatarFallback className="text-xs">{message.initials}</AvatarFallback>
-                      </Avatar>
-                      <div
-                        className={`flex-1 max-w-[80%] md:max-w-[70%] ${message.user === "You" ? "text-right" : ""}`}
-                      >
+                {messages.map((message) => {
+                  const userInfo = usersById[message.user_id] || {}
+                  return (
+                    <div key={message.id} className={`mb-4 ${message.user_id === user?.id ? "text-right" : "text-left"}`}>
+                      <div className={`flex gap-2 md:gap-3 ${message.user_id === user?.id ? "flex-row-reverse" : ""}`}>
+                        <Avatar className="h-6 w-6 md:h-8 md:w-8 flex-shrink-0">
+                          <AvatarFallback className="text-xs">
+                            {userInfo.name
+                              ? userInfo.name.split(" ").map((n: string) => n[0]).join("")
+                              : "--"}
+                          </AvatarFallback>
+                        </Avatar>
                         <div
-                          className={`flex items-center gap-2 mb-1 ${message.user === "You" ? "flex-row-reverse" : ""}`}
+                          className={`flex-1 max-w-[80%] md:max-w-[70%] ${message.user_id === user?.id ? "text-right" : ""}`}
                         >
-                          <span className="font-medium text-xs md:text-sm">{message.user}</span>
-                          <span className="text-xs text-muted-foreground">{message.timestamp}</span>
-                        </div>
-                        <div
-                          className={`inline-block p-2 md:p-3 rounded-lg text-xs md:text-sm ${
-                            message.user === "You" ? "bg-blue-500 text-white" : "bg-muted"
-                          }`}
-                        >
-                          {message.message}
+                          <div
+                            className={`flex items-center gap-2 mb-1 ${message.user_id === user?.id ? "flex-row-reverse" : ""}`}
+                          >
+                            <span className="font-medium text-xs md:text-sm">{userInfo.name || "Unknown"}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                            </span>
+                          </div>
+                          <div
+                            className={`inline-block p-2 md:p-3 rounded-lg text-xs md:text-sm ${
+                              message.user_id === user?.id ? "bg-blue-500 text-white" : "bg-muted"
+                            }`}
+                          >
+                            {message.content}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
@@ -358,10 +381,11 @@ export default function ChatPage() {
                 <Input
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder={`Message #${selectedChannel.name}`}
+                  placeholder={`Message #${selectedChannel?.name || ""}`}
                   className="flex-1 text-sm"
+                  disabled={!selectedChannel}
                 />
-                <Button type="submit" size="icon" className="flex-shrink-0">
+                <Button type="submit" size="icon" className="flex-shrink-0" disabled={!selectedChannel}>
                   <Send className="h-4 w-4" />
                 </Button>
               </form>

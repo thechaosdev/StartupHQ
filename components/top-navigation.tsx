@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -23,13 +23,13 @@ import {
   Users,
   Settings,
   Menu,
-  Bell,
   Search,
   Plus,
-  Calendar,
 } from "lucide-react"
+import { useAuth } from "@/lib/hooks/useAuth"
 
 import logo from "@/assets/logo.png"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 const navigationItems = [
   {
@@ -41,24 +41,22 @@ const navigationItems = [
     title: "Chat",
     href: "/chat",
     icon: MessageSquare,
-    badge: 3,
   },
   {
     title: "Tasks",
     href: "/tasks",
     icon: CheckSquare,
-    badge: 5,
   },
   {
     title: "Docs",
     href: "/docs",
     icon: FileText,
   },
-  {
-    title: "Attendance",
-    href: "/attendance",
-    icon: Calendar,
-  },
+  // {
+  //   title: "Attendance",
+  //   href: "/attendance",
+  //   icon: Calendar,
+  // },
   {
     title: "Team",
     href: "/team",
@@ -69,6 +67,35 @@ const navigationItems = [
 export function TopNavigation() {
   const pathname = usePathname()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const { signOut } = useAuth()
+  const router = useRouter()
+  const supabase = createClientComponentClient();
+  const [profile, setProfile] = useState<any>(null)
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      if (error) {
+        console.error('Error fetching user profile:', error)
+        setProfile(null)
+        return
+      }
+      setProfile(profile)
+    }
+    fetchUserData()
+  }, [supabase])
+
+
+  const handleSignOut = async () => {
+    await signOut()
+    router.push("/auth/login")
+  }
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -98,14 +125,14 @@ export function TopNavigation() {
           >
             <item.icon className="h-4 w-4" />
             <span>{item.title}</span>
-            {item.badge && (
+            {/* {item.badge && (
               <Badge
                 variant={active ? "secondary" : "destructive"}
                 className="h-5 w-5 p-0 flex items-center justify-center text-xs ml-auto"
               >
                 {item.badge}
               </Badge>
-            )}
+            )} */}
           </Link>
         )
       })}
@@ -116,11 +143,11 @@ export function TopNavigation() {
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Logo */}
           <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-            <img src={logo.src} alt="Startup Logo" className="rounded-xl h-8 w-8 md:h-10 md:w-10 ">
+            <img src={logo.src} alt="Startup Logo" className="rounded-lg h-8 w-8 md:h-10 md:w-10 ">
             </img>
-            <span className="font-bold text-lg md:text-xl">Lixta Network</span>
+            <br />
+            <span className="font-semibold text-lg md:text-xl">Lixta Network</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -151,23 +178,23 @@ export function TopNavigation() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback>YU</AvatarFallback>
+                    <AvatarFallback>{profile?.name ? profile.name.split(" ").map((n: string) => n[0]).join("") : "--"}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuItem>
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">John Doe</p>
-                    <p className="text-xs leading-none text-muted-foreground">john@company.com</p>
+                    <p className="text-sm font-medium leading-none">{profile?.name || "-"}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{profile?.email || "-"}</p>
                   </div>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                {/* <DropdownMenuItem>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
+                </DropdownMenuItem> */}
+                <DropdownMenuItem onClick={handleSignOut}>
                   <span>Sign out</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -219,7 +246,6 @@ export function TopNavigation() {
           </div>
         </div>
 
-        {/* Mobile Navigation Chips - Below header on smaller screens */}
         <div className="lg:hidden pb-3 border-b">
           <ScrollArea className="w-full">
             <div className="flex gap-2 pb-2">
@@ -240,14 +266,14 @@ export function TopNavigation() {
                   >
                     <item.icon className="h-4 w-4" />
                     <span className="hidden sm:inline">{item.title}</span>
-                    {item.badge && (
+                    {/* {item.badge && (
                       <Badge
                         variant={active ? "secondary" : "destructive"}
                         className="h-4 w-4 p-0 flex items-center justify-center text-xs"
                       >
                         {item.badge}
                       </Badge>
-                    )}
+                    )} */}
                   </Link>
                 )
               })}

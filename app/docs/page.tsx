@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, FileText, Search, Calendar, Users, BookOpen, Menu } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { TopNavigation } from "@/components/top-navigation"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 // Mock data
 const mockDocs = [
@@ -53,19 +55,35 @@ const templates = [
 ]
 
 export default function DocsPage() {
-  const [docs, setDocs] = useState(mockDocs)
+  const [docs, setDocs] = useState<any[]>([])
   const [selectedDoc, setSelectedDoc] = useState<(typeof mockDocs)[0] | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const supabase = createClientComponentClient();
+  const { user } = useAuth();
 
   const filteredDocs = docs.filter(
     (doc) =>
       doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.content.toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  useEffect(() => {
+    const fetchDocs = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("documents")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error && data) setDocs(data);
+      setLoading(false);
+    };
+    fetchDocs();
+  }, []);
 
   const handleDocSelect = (doc: (typeof mockDocs)[0]) => {
     setSelectedDoc(doc)
@@ -77,16 +95,26 @@ export default function DocsPage() {
     setIsEditing(true)
   }
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (selectedDoc) {
-      const updatedDocs = docs.map((doc) =>
-        doc.id === selectedDoc.id
-          ? { ...doc, content: editContent, lastModified: new Date().toISOString().split("T")[0] }
-          : doc,
-      )
-      setDocs(updatedDocs)
-      setSelectedDoc({ ...selectedDoc, content: editContent, lastModified: new Date().toISOString().split("T")[0] })
-      setIsEditing(false)
+      const { data, error } = await supabase
+        .from("documents")
+        .update({
+          content: editContent,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", selectedDoc.id)
+        .select()
+        .single();
+
+      if (!error && data) {
+        const updatedDocs = docs.map((doc) =>
+          doc.id === selectedDoc.id ? data : doc
+        );
+        setDocs(updatedDocs);
+        setSelectedDoc(data);
+        setIsEditing(false);
+      }
     }
   }
 
@@ -118,20 +146,25 @@ export default function DocsPage() {
       }
     }
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
       if (!formData.title.trim()) return
 
-      const doc = {
-        id: Date.now(), // Use timestamp for unique ID
-        ...formData,
-        lastModified: new Date().toISOString().split("T")[0],
-        author: "You",
-        content: formData.content || getTemplateContent(formData.type),
+      const { data, error } = await supabase
+        .from("documents")
+        .insert({
+          title: formData.title,
+          content: formData.content || getTemplateContent(formData.type),
+          type: formData.type,
+          folder: formData.folder,
+          created_by: user?.id,
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        onSuccess(data);
       }
 
-      onSuccess(doc)
-
-      // Reset form
       setFormData({
         title: "",
         type: "Blank Document",
@@ -294,7 +327,11 @@ export default function DocsPage() {
 
           {/* Main Content */}
           <div className="flex-1 flex flex-col">
-            {selectedDoc ? (
+            {loading && <div className="flex-1 flex items-center justify-center text-muted-foreground">Loading...</div>}
+            {!loading && docs.length === 0 && (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground">No documents found.</div>
+            )}
+            {!loading && selectedDoc ? (
               <>
                 <div className="p-3 md:p-4 border-b">
                   <div className="flex items-start justify-between gap-4">
@@ -421,13 +458,15 @@ export default function DocsPage() {
                       Choose a document from the sidebar to view its content
                     </p>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2 ">
                     <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                       <DialogTrigger asChild>
-                        <Button className="w-full sm:w-auto">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Create New Document
-                        </Button>
+                        <div className="flex justify-center w-full">
+                          <Button className="w-full sm:w-auto max-w-xs">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create New Document
+                          </Button>
+                        </div>
                       </DialogTrigger>
                       <DialogContent className="w-[95vw] max-w-2xl">
                         <DialogHeader>

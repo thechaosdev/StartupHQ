@@ -9,6 +9,9 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Startup HQ",
   description: "Chat, tasks, docs, and meetings in one place",
+  icons:{
+    icon:"/favicon.ico"
+  }
 }
 
 export default function RootLayout({

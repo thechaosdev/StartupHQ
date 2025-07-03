@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -19,34 +20,50 @@ export default function LoginPage() {
     password: "",
   })
   const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
-  const router = useRouter()
-  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const supabase = createClientComponentClient();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
+  
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      if (formData.email === "demo@teamsync.com" && formData.password === "password") {
-        toast({
-          title: "Welcome back!",
-          description: "You have been successfully logged in.",
-        })
-        router.push("/")
-      } else {
-        setError("Invalid email or password. Try demo@teamsync.com / password")
+      if (error) {
+        throw error;
       }
-    } catch (err) {
-      setError("An error occurred. Please try again.")
+
+      // Check if user has completed onboarding (if you have that requirement)
+      // const { data: userData } = await supabase
+      //   .from('users')
+      //   .select('onboarded')
+      //   .eq('id', data.user?.id)
+      //   .single();
+
+      // Redirect based on onboarding status
+      router.push("/");
+      router.refresh(); // Refresh to update auth state in the app
+    } catch (error) {
+      console.error("Login error:", error);
+      setError(
+        error instanceof Error ? error.message : "Invalid login credentials"
+      );
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -124,11 +141,7 @@ export default function LoginPage() {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  {/* <input
-                    id="remember"
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  /> */}
+                 
                   <Label htmlFor="remember" className="text-sm text-gray-600">
                     
                   </Label>
