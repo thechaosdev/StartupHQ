@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { useAuth } from "@/lib/hooks/useAuth"
 
-// Real-time messages hook
 function useRealtimeMessages(channelId: string, supabase: any) {
   const [messages, setMessages] = useState<any[]>([])
 
@@ -27,7 +26,7 @@ function useRealtimeMessages(channelId: string, supabase: any) {
         .select("*")
         .eq("channel_id", channelId)
         .order("created_at", { ascending: true })
-        .limit(50) // Only fetch latest 50 messages
+        .limit(50)
       setMessages(data || [])
     }
     fetchMessages()
@@ -65,7 +64,6 @@ export default function ChatPage() {
   const [teamMembers, setTeamMembers] = useState<any[]>([])
   const [usersById, setUsersById] = useState<{ [key: string]: any }>({})
 
-  // Fetch channels for the user (efficient join)
   useEffect(() => {
     if (!user) return
     const fetchChannels = async () => {
@@ -77,7 +75,6 @@ export default function ChatPage() {
         setChannels([])
         return
       }
-      // Extract channels from the join result
       const channelList = (data || [])
         .map((cm: any) => cm.channels)
         .filter(Boolean)
@@ -87,7 +84,6 @@ export default function ChatPage() {
     fetchChannels()
   }, [user])
 
-  // Fetch all users once and build a map for quick lookup
   useEffect(() => {
     const fetchUsers = async () => {
       const { data } = await supabase.from("users").select("id, name, status")
@@ -99,15 +95,12 @@ export default function ChatPage() {
     fetchUsers()
   }, [])
 
-  // Real-time messages for selected channel
   const messages = useRealtimeMessages(selectedChannel?.id || "", supabase)
 
-  // Scroll to bottom on new message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Send message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !user || !selectedChannel) return
@@ -119,13 +112,11 @@ export default function ChatPage() {
     setNewMessage("")
   }
 
-  // Channel select
   const handleChannelSelect = (channel: any) => {
     setSelectedChannel(channel)
     setIsMobileMenuOpen(false)
   }
 
-  // Create channel form
   const CreateChannelForm = ({ onSuccess, onCancel }: { onSuccess: (channel: any) => void; onCancel: () => void }) => {
     const [formData, setFormData] = useState({
       name: "",
@@ -143,14 +134,12 @@ export default function ChatPage() {
 
     const handleSubmit = async () => {
       if (!formData.name.trim() || !user) return
-      // 1. Create channel
       const { data: channelData, error } = await supabase
         .from("channels")
         .insert({ name: formData.name, created_by: user.id })
         .select()
         .single()
       if (error || !channelData) return
-      // 2. Add members (including creator)
       const memberIds = Array.from(new Set([...formData.selectedMembers, user.id]))
       await supabase.from("channel_members").insert(
         memberIds.map((uid) => ({ channel_id: channelData.id, user_id: uid }))
@@ -192,18 +181,11 @@ export default function ChatPage() {
                       </AvatarFallback>
                     </Avatar>
                     <div
-                      className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-white ${
-                        member.status === "online"
-                          ? "bg-green-500"
-                          : member.status === "away"
-                            ? "bg-yellow-500"
-                            : "bg-gray-400"
-                      }`}
+                      
                     />
                   </div>
                   <div className="flex-1">
                     <p className="font-medium text-sm">{member.name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{member.status}</p>
                   </div>
                   {isSelected && (
                     <div className="h-5 w-5 bg-blue-500 rounded-full flex items-center justify-center">
