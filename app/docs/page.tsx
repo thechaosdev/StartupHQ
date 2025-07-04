@@ -73,14 +73,6 @@ export default function DocsPage() {
       doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.content.toLowerCase().includes(searchTerm.toLowerCase()),
   )
-  
-  if (loading || (!user && !loading)) {
-    return (
-      <div className="flex items-center justify-center h-screen w-full text-muted-foreground">
-        Loading...
-      </div>
-    );
-  }
 
   useEffect(() => {
     const fetchDocs = async () => {
