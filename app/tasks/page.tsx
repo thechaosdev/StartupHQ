@@ -60,6 +60,14 @@ export default function TasksPage() {
     }
     fetchUsers()
   }, [])
+  
+  if (loading || (!user && !loading)) {
+    return (
+      <div className="flex items-center justify-center h-screen w-full text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
 
   const handleAddTask = async () => {
     if (!newTask.title.trim() || !user) return

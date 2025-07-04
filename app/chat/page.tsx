@@ -86,6 +86,14 @@ export default function ChatPage() {
     fetchChannels()
   }, [user])
 
+  if (loading || (!user && !loading)) {
+    return (
+      <div className="flex items-center justify-center h-screen w-full text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+  
   useEffect(() => {
     const fetchUsers = async () => {
       const { data } = await supabase.from("users").select("id, name, status")
