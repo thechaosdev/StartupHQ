@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Send, Hash, Users, Plus, Menu } from "lucide-react"
+import { Send, Hash, Plus, Menu } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { TopNavigation } from "@/components/top-navigation"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { useAuth } from "@/lib/hooks/useAuth"
+import { useRouter } from "next/navigation"
 
 function useRealtimeMessages(channelId: string, supabase: any) {
   const [messages, setMessages] = useState<any[]>([])
@@ -54,7 +55,8 @@ function useRealtimeMessages(channelId: string, supabase: any) {
 
 export default function ChatPage() {
   const supabase = createClientComponentClient()
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
+  const router = useRouter()
   const [channels, setChannels] = useState<any[]>([])
   const [selectedChannel, setSelectedChannel] = useState<any | null>(null)
   const [newMessage, setNewMessage] = useState("")
@@ -268,7 +270,7 @@ export default function ChatPage() {
                 selectedChannel?.id === channel.id ? "bg-accent" : ""
               }`}
             >
-              <Hash className="h-4 w-4 text-muted-foreground" />
+                <Hash className="h-4 w-4 text-muted-foreground" />
               <span className="flex-1 truncate text-sm">{channel.name}</span>
             </button>
           ))}
@@ -276,6 +278,8 @@ export default function ChatPage() {
       </ScrollArea>
     </div>
   )
+
+  if (loading || (!user && !loading)) return null;
 
   return (
     <>
@@ -307,7 +311,7 @@ export default function ChatPage() {
                   </SheetTrigger>
                 </Sheet>
 
-                <Hash className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
+                  <Hash className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
                 <h1 className="font-semibold text-sm md:text-base truncate">{selectedChannel?.name}</h1>
                 <Badge variant="secondary" className="ml-auto text-xs">
                   {messages.length} messages
@@ -323,13 +327,13 @@ export default function ChatPage() {
                   return (
                     <div key={message.id} className={`mb-4 ${message.user_id === user?.id ? "text-right" : "text-left"}`}>
                       <div className={`flex gap-2 md:gap-3 ${message.user_id === user?.id ? "flex-row-reverse" : ""}`}>
-                        <Avatar className="h-6 w-6 md:h-8 md:w-8 flex-shrink-0">
+                      <Avatar className="h-6 w-6 md:h-8 md:w-8 flex-shrink-0">
                           <AvatarFallback className="text-xs">
                             {userInfo.name
                               ? userInfo.name.split(" ").map((n: string) => n[0]).join("")
                               : "--"}
                           </AvatarFallback>
-                        </Avatar>
+                      </Avatar>
                         <div
                           className={`flex-1 max-w-[80%] md:max-w-[70%] ${message.user_id === user?.id ? "text-right" : ""}`}
                         >
@@ -340,12 +344,12 @@ export default function ChatPage() {
                             <span className="text-xs text-muted-foreground">
                               {message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
                             </span>
-                          </div>
-                          <div
-                            className={`inline-block p-2 md:p-3 rounded-lg text-xs md:text-sm ${
+                        </div>
+                        <div
+                          className={`inline-block p-2 md:p-3 rounded-lg text-xs md:text-sm ${
                               message.user_id === user?.id ? "bg-blue-500 text-white" : "bg-muted"
-                            }`}
-                          >
+                          }`}
+                        >
                             {message.content}
                           </div>
                         </div>

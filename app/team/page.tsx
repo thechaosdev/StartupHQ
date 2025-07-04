@@ -8,32 +8,33 @@ import { Mail, MessageSquare, Calendar, CheckSquare, Users, Plus } from "lucide-
 import { TopNavigation } from "@/components/top-navigation"
 import { useEffect, useState } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { useRouter } from "next/navigation"
+
 
 export default function TeamPage() {
+  const { user, loading } = useAuth()
+  const router = useRouter()
   const [teamMembers, setTeamMembers] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const supabase = createClientComponentClient()
   const [tasks, setTasks] = useState<any[]>([])
 
+
   useEffect(() => {
     const fetchUsers = async () => {
-      setLoading(true)
       const { data, error } = await supabase.from("users").select("*")
       if (!error && data) setTeamMembers(data)
-      setLoading(false)
     }
     fetchUsers()
   }, [])
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true)
       const { data: taskData } = await supabase
         .from("tasks")
         .select("*, assigned_user:users!tasks_assigned_to_fkey(id, name)")
         .limit(3)
       setTasks(taskData || [])
-      setLoading(false)
     }
     fetchData()
   }, [])

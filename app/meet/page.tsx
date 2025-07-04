@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Video, Plus, Calendar, Users, Clock, ExternalLink, Copy, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { TopNavigation } from "@/components/top-navigation"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { useRouter } from "next/navigation"
 
 // Mock data
 const mockMeetings = [
@@ -55,6 +57,8 @@ const mockMeetings = [
 ]
 
 export default function MeetPage() {
+  const { user, loading } = useAuth()
+  const router = useRouter()
   const [meetings, setMeetings] = useState(mockMeetings)
   const [isCreating, setIsCreating] = useState(false)
   const [copiedLink, setCopiedLink] = useState<string | null>(null)
@@ -68,6 +72,14 @@ export default function MeetPage() {
     attendees: [] as string[],
     agenda: "",
   })
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/auth/login")
+    }
+  }, [user, loading, router])
+
+  if (loading || (!user && !loading)) return null;
 
   const generateMeetingLink = (title: string) => {
     const roomName = title

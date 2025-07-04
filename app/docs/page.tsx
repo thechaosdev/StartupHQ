@@ -13,8 +13,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { TopNavigation } from "@/components/top-navigation"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { useRouter } from "next/navigation";
 
-// Mock data
 const mockDocs = [
   {
     id: 1,
@@ -64,7 +64,8 @@ export default function DocsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const supabase = createClientComponentClient();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
 
   const filteredDocs = docs.filter(
     (doc) =>
@@ -307,6 +308,8 @@ export default function DocsPage() {
       </ScrollArea>
     </div>
   )
+
+  if (loading || (!user && !loading)) return null;
 
   return (
     <>

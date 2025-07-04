@@ -10,9 +10,14 @@ import Link from "next/link"
 import { CreateBoardModal } from "@/components/create-board-modal"
 import { TopNavigation } from "@/components/top-navigation"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { useRouter } from "next/navigation"
+
 
 export default function Dashboard() {
   const [showCreateBoardModal, setShowCreateBoardModal] = useState(false)
+  const { user } = useAuth()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [users, setUsers] = useState<any[]>([])
   const [tasks, setTasks] = useState<any[]>([])
