@@ -194,8 +194,8 @@ export function TopNavigation() {
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem> */}
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <span>Sign out</span>
+                <DropdownMenuItem onClick={profile ? handleSignOut : () => router.push("/auth/login")}>
+                  <span>{profile ? "Sign out" : "Sign in"}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
