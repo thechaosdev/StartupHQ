@@ -199,50 +199,6 @@ export function TopNavigation() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* Mobile Menu */}
-            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" className="lg:hidden">
-                  <Menu className="h-4 w-4" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-80">
-                <div className="flex flex-col h-full">
-                  <div className="flex items-center gap-2 pb-4 border-b">
-                    <div className="h-6 w-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg"></div>
-                    <span className="font-bold text-lg">TeamSync</span>
-                  </div>
-
-                  <ScrollArea className="flex-1 py-6">
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-sm font-medium text-muted-foreground mb-3">Navigation</h3>
-                        <NavigationChips isMobile />
-                      </div>
-
-                      <div className="pt-4 border-t">
-                        <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Actions</h3>
-                        <div className="space-y-2">
-                          <Button variant="ghost" className="w-full justify-start">
-                            <Search className="mr-2 h-4 w-4" />
-                            Search
-                          </Button>
-                          <Button variant="ghost" className="w-full justify-start">
-                            <Plus className="mr-2 h-4 w-4" />
-                            Quick Add
-                          </Button>
-                          <Button variant="ghost" className="w-full justify-start">
-                            <Settings className="mr-2 h-4 w-4" />
-                            Settings
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </ScrollArea>
-                </div>
-              </SheetContent>
-            </Sheet>
           </div>
         </div>
 
