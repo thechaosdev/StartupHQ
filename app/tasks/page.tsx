@@ -18,7 +18,6 @@ import { TopNavigation } from "@/components/top-navigation"
 import { tasksApi } from "@/lib/api/tasks"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { useRouter } from "next/navigation"
 
 const statusColumns = [
   { id: "todo", title: "To Do", color: "bg-gray-100" },
@@ -28,7 +27,6 @@ const statusColumns = [
 
 export default function TasksPage() {
   const { user, loading } = useAuth()
-  const router = useRouter()
   const [tasks, setTasks] = useState<any[]>([])
   const [view, setView] = useState<"kanban" | "list">("kanban")
   const [isAddingTask, setIsAddingTask] = useState(false)

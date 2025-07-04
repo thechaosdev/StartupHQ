@@ -15,6 +15,10 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRouter } from "next/navigation";
 
+// Server-side data fetching
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+
 const mockDocs = [
   {
     id: 1,
@@ -54,8 +58,20 @@ const templates = [
   { id: "roadmap", name: "Roadmap", icon: BookOpen },
 ]
 
-export default function DocsPage() {
-  const [docs, setDocs] = useState<any[]>([])
+export default async function DocsPage() {
+  const supabase = createServerComponentClient({ cookies });
+  const { data, error } = await supabase
+    .from("documents")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  const docs = data || [];
+
+  // Pass docs to a client component for interactivity
+  return <DocsClient docs={docs} />;
+}
+
+function DocsClient({ docs }: { docs: any[] }) {
   const [selectedDoc, setSelectedDoc] = useState<(typeof mockDocs)[0] | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -63,7 +79,6 @@ export default function DocsPage() {
   const [editContent, setEditContent] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
-  const supabase = createClientComponentClient();
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
@@ -72,19 +87,6 @@ export default function DocsPage() {
       doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.content.toLowerCase().includes(searchTerm.toLowerCase()),
   )
-
-  useEffect(() => {
-    const fetchDocs = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("documents")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (!error && data) setDocs(data);
-      setLoading(false);
-    };
-    fetchDocs();
-  }, []);
 
   const handleDocSelect = (doc: (typeof mockDocs)[0]) => {
     setSelectedDoc(doc)
@@ -98,6 +100,7 @@ export default function DocsPage() {
 
   const handleSaveEdit = async () => {
     if (selectedDoc) {
+      const supabase = createClientComponentClient();
       const { data, error } = await supabase
         .from("documents")
         .update({
@@ -150,6 +153,7 @@ export default function DocsPage() {
     const handleSubmit = async () => {
       if (!formData.title.trim()) return
 
+      const supabase = createClientComponentClient();
       const { data, error } = await supabase
         .from("documents")
         .insert({
@@ -503,3 +507,7 @@ export default function DocsPage() {
     </>
   )
 }
+function setDocs(updatedDocs: any[]) {
+  throw new Error("Function not implemented.")
+}
+
