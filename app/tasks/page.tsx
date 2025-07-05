@@ -215,8 +215,6 @@ export default function TasksPage() {
     </div>
   )
 
-  if (loading || (!user && !loading)) return null;
-
   return (
     <>
       <TopNavigation />

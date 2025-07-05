@@ -279,8 +279,6 @@ export default function ChatPage() {
     </div>
   )
 
-  if (loading || (!user && !loading)) return null;
-
   return (
     <>
       <TopNavigation />
