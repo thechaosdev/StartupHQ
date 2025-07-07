@@ -37,11 +37,11 @@ const navigationItems = [
     href: "/",
     icon: Home,
   },
-  {
-    title: "Chat",
-    href: "/chat",
-    icon: MessageSquare,
-  },
+  // {
+  //   title: "Chat",
+  //   href: "/chat",
+  //   icon: MessageSquare,
+  // },
   {
     title: "Tasks",
     href: "/tasks",
