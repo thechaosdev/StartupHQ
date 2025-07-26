@@ -48,13 +48,13 @@ export function Footer() {
           <div className="w-full max-w-md border-t border-gray-200"></div>
 
           <div className="flex space-x-3">
-            <Link href="https://instagram.com" className="text-black border border-black rounded-xl p-4">
+            <Link href="https://www.instagram.com/infoxrehman/" className="text-black border border-black rounded-xl p-4">
               <Instagram size={22} />
             </Link>
-            <Link href="https://twitter.com" className="text-black border border-black rounded-xl p-4">
+            <Link href="https://x.com/infoxrehman/" className="text-black border border-black rounded-xl p-4">
               <Twitter size={22} />
             </Link>
-            <Link href="https://www.linkedin.com" className="text-black border border-black rounded-xl p-4">
+            <Link href="https://www.linkedin.com/in/khan-abdul-rehman/" className="text-black border border-black rounded-xl p-4">
               <Linkedin size={22} />
             </Link>
           </div>

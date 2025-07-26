@@ -157,9 +157,11 @@ export function TopNavigation() {
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setShowPricingDialog(true)}>
+                  <DropdownMenuItem asChild>
+                    <Link href="/pricing">
                     <BadgeDollarSign className="mr-2 h-4 w-4" />
                     <span>Upgrade plans</span>
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={profile ? handleSignOut : () => router.push("/auth/login")}>
                     <span>{profile ? "Sign out" : "Sign in"}</span>
@@ -178,26 +180,6 @@ export function TopNavigation() {
           </div>
         </div>
       </header>
-
-      <Dialog open={showPricingDialog} onOpenChange={setShowPricingDialog}>
-        <DialogContent className="max-w-4xl p-8">
-          <DialogHeader>
-            <DialogTitle className="text-center text-2xl">Upgrade Your Plan</DialogTitle>
-          </DialogHeader>
-          <div className="">
-            <PricingTables />
-          </div>
-          <div className="flex justify-center">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowPricingDialog(false)}
-              className="mt-4"
-            >
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

@@ -22,7 +22,6 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
-import { Skeleton } from "@/components/ui/skeleton"
 
 const statusColumns = [
   { id: "todo", title: "To Do", color: "bg-gray-100" },
@@ -49,7 +48,7 @@ export default function TasksPage() {
   })
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [users, setUsers] = useState<any[]>([])
-  const [userPlan, setUserPlan] = useState<string | null>(null)
+  const [userPlan, setUserPlan] = useState<string>("free")
   const [longPressTaskId, setLongPressTaskId] = useState<string | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const supabase = createClientComponentClient()
@@ -64,66 +63,53 @@ export default function TasksPage() {
   }, [selectedDate])
 
   useEffect(() => {
-    const fetchUserPlan = async () => {
-      if (!user?.id) return
-      
-      // Check localStorage first for cached plan
-      const cachedPlan = localStorage.getItem('userPlan')
-      if (cachedPlan) {
-        setUserPlan(cachedPlan)
-      }
-      
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('plan')
-          .eq('id', user.id)
-          .single()
-        
-        const plan = profile?.plan || "free"
-        setUserPlan(plan)
-        localStorage.setItem('userPlan', plan)
-      } catch (err) {
-        console.error("Error fetching user plan:", err)
-        setUserPlan("free")
-      }
-    }
-
     const fetchData = async () => {
       try {
-        await Promise.all([
-          fetchUserPlan(),
-          
-          // Fetch tasks
-          (async () => {
-            const tasksData = await tasksApi.getTasks()
-            const tasksWithUsers = await Promise.all(tasksData.map(async (task: any) => {
-              if (task.assigned_to) {
-                const { data: user } = await supabase
-                  .from('users')
-                  .select('*')
-                  .eq('id', task.assigned_to)
-                  .single()
-                return { ...task, assigned_user: user }
-              }
-              return task
-            }))
-            setTasks(tasksWithUsers)
-          })(),
-          
-          // Fetch users
-          (async () => {
-            const { data: usersData } = await supabase.from("users").select("*")
-            setUsers(usersData || [])
-          })()
-        ])
+        // Fetch user plan
+        if (user?.id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('plan')
+            .eq('id', user.id)
+            .single()
+          setUserPlan(profile?.plan || "free")
+        }
+
+        // Fetch tasks
+        const tasksData = await tasksApi.getTasks()
+        
+        // Filter tasks based on user plan
+        let filteredTasks = tasksData
+        if (userPlan === "free" && user?.id) {
+          filteredTasks = tasksData.filter(task => task.created_by === user.id)
+        }
+
+        // Map assigned_user to each task
+        const tasksWithUsers = await Promise.all(filteredTasks.map(async (task: any) => {
+          if (task.assigned_to) {
+            const { data: user } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', task.assigned_to)
+              .single()
+            return { ...task, assigned_user: user }
+          }
+          return task
+        }))
+        
+        setTasks(tasksWithUsers)
+
+        const { data: usersData } = await supabase.from("users").select("*")
+        // For free plan, only show current user in assignee dropdown
+        setUsers(userPlan === "free" && user?.id 
+          ? usersData?.filter(u => u.id === user.id) || [] 
+          : usersData || [])
       } catch (err) {
         console.error("Error fetching data:", err)
       }
     }
-
     fetchData()
-  }, [user?.id])
+  }, [user?.id, userPlan])
 
   const handleAddTask = async () => {
     if (!newTask.title.trim() || !user) return
@@ -167,15 +153,22 @@ export default function TasksPage() {
   const handleEditTask = async () => {
     if (!currentTask?.title.trim() || !currentTask?.id) return
     
+    // For free plan, verify the task belongs to the user
+    if (userPlan === "free" && currentTask?.created_by !== user?.id) {
+      console.error("Unauthorized task edit")
+      return
+    }
+
     try {
       const updated = await tasksApi.updateTask(currentTask.id, {
         title: currentTask.title,
         description: currentTask.description,
         priority: currentTask.priority,
-        assignedTo: currentTask.assigned_to,
-        dueDate: currentTask.due_date,
+        assigned_to: currentTask.assigned_to,
+        due_date: currentTask.due_date,
       })
       
+      // Fetch the assigned user if exists
       if (updated.assigned_to) {
         const { data: assignedUser } = await supabase
           .from('users')
@@ -196,6 +189,15 @@ export default function TasksPage() {
   const handleDeleteTask = async () => {
     if (!longPressTaskId) return
     
+    // For free plan, verify the task belongs to the user
+    if (userPlan === "free") {
+      const taskToDelete = tasks.find(t => t.id === longPressTaskId)
+      if (taskToDelete?.created_by !== user?.id) {
+        console.error("Unauthorized task deletion")
+        return
+      }
+    }
+
     try {
       await tasksApi.deleteTask(longPressTaskId)
       setTasks(tasks.filter(task => task.id !== longPressTaskId))
@@ -208,6 +210,15 @@ export default function TasksPage() {
 
   const moveTask = async (taskId: string, newStatus: string) => {
     try {
+      // For free plan, verify the task belongs to the user
+      if (userPlan === "free") {
+        const taskToMove = tasks.find(t => t.id === taskId)
+        if (taskToMove?.created_by !== user?.id) {
+          console.error("Unauthorized task move")
+          return
+        }
+      }
+      
       const updated = await tasksApi.updateTask(taskId, { status: newStatus })
       setTasks(tasks.map((task) => (task.id === taskId ? { ...task, status: newStatus } : task)))
     } catch (err) {
@@ -265,46 +276,8 @@ export default function TasksPage() {
     }
   }
 
-  const userTaskCount = user?.id ? tasks.filter(task => task.created_by === user.id).length : 0
+  const userTaskCount = tasks.filter(task => task.created_by === user?.id).length
   const isFreePlanLimitReached = userPlan === "free" && userTaskCount >= 5
-
-  // Loading state
-  if (userPlan === null) {
-    return (
-      <>
-        <TopNavigation />
-        <main className="pt-16 md:pt-20">
-          <div className="p-3 md:p-6 space-y-4 md:space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <Skeleton className="h-8 w-[200px]" />
-                <Skeleton className="h-4 w-[150px] mt-2" />
-              </div>
-              <div className="flex gap-2">
-                <Skeleton className="h-10 w-[100px]" />
-                <Skeleton className="h-10 w-[80px]" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-              {statusColumns.map((column) => (
-                <div key={column.id} className="space-y-4">
-                  <div className={`p-3 rounded-lg ${column.color}`}>
-                    <Skeleton className="h-5 w-[100px]" />
-                    <Skeleton className="h-4 w-[50px] mt-1" />
-                  </div>
-                  <div className="space-y-2">
-                    {[...Array(3)].map((_, i) => (
-                      <Skeleton key={i} className="h-[100px] w-full" />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </main>
-      </>
-    )
-  }
 
   const TaskCard = ({ task }: { task: any }) => {
     let pressTimer: NodeJS.Timeout
@@ -313,7 +286,7 @@ export default function TasksPage() {
       pressTimer = setTimeout(() => {
         setLongPressTaskId(task.id)
         setShowDeleteDialog(true)
-      }, 800) // 800ms for long press
+      }, 1000) // 1 second for long press
     }
 
     const endPress = () => {
@@ -367,10 +340,10 @@ export default function TasksPage() {
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <CalendarIcon className="h-3 w-3" />
                   <span className="hidden sm:inline">
-                    {format(new Date(task.due_date), "MMM dd, yyyy")}
+                    {new Date(task.due_date).toLocaleDateString()}
                   </span>
                   <span className="sm:hidden">
-                    {format(new Date(task.due_date), "MMM dd")}
+                    {new Date(task.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </span>
                 </div>
               )}
@@ -408,7 +381,9 @@ export default function TasksPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold">Tasks</h1>
-              <p className="text-sm md:text-base text-muted-foreground">Manage your team's work</p>
+              <p className="text-sm md:text-base text-muted-foreground">
+                {userPlan === "free" ? "Your personal tasks" : "Manage your team's work"}
+              </p>
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -427,13 +402,18 @@ export default function TasksPage() {
               </Tabs>
 
               {isFreePlanLimitReached ? (
-                <Button 
-                  variant="outline" 
-                  className="w-full sm:w-auto"
-                  onClick={() => router.push("/billing")}
-                >
-                  Upgrade Plan to Add More Tasks
-                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => router.push('/pricing')}>
+                      Upgrade Plan
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64">
+                    <p className="text-sm">
+                      You've reached the free plan limit of 5 tasks. Upgrade to add more tasks.
+                    </p>
+                  </PopoverContent>
+                </Popover>
               ) : (
                 <Dialog open={isAddingTask} onOpenChange={setIsAddingTask}>
                   <DialogTrigger asChild>
@@ -561,6 +541,7 @@ export default function TasksPage() {
             </div>
           </div>
 
+          {/* Edit Task Dialog */}
           <Dialog open={isEditingTask} onOpenChange={setIsEditingTask}>
             <DialogContent className="w-[95vw] max-w-2xl">
               <DialogHeader>
@@ -677,6 +658,7 @@ export default function TasksPage() {
             </DialogContent>
           </Dialog>
 
+          {/* Delete Confirmation Dialog */}
           <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
             <DialogContent>
               <DialogHeader>
@@ -769,7 +751,7 @@ export default function TasksPage() {
                           <div className="flex items-center gap-2">
                             <CalendarIcon className="h-3 w-3 md:h-4 md:w-4" />
                             <span className="whitespace-nowrap">
-                              {format(new Date(task.due_date), "MMM dd, yyyy")}
+                              {new Date(task.due_date).toLocaleDateString()}
                             </span>
                           </div>
                         )}
