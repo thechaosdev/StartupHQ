@@ -52,7 +52,7 @@ export default function LoginPage() {
       //   .single();
 
       // Redirect based on onboarding status
-      router.push("/");
+      router.push("/dashboard");
       router.refresh(); // Refresh to update auth state in the app
     } catch (error) {
       console.error("Login error:", error);

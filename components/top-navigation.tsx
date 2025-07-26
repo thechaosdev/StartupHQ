@@ -34,7 +34,7 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 const navigationItems = [
   {
     title: "Dashboard",
-    href: "/",
+    href: "/dashboard",
     icon: Home,
   },
   // {
@@ -44,12 +44,12 @@ const navigationItems = [
   // },
   {
     title: "Tasks",
-    href: "/tasks",
+    href: "/dashboard/tasks",
     icon: CheckSquare,
   },
   {
     title: "Docs",
-    href: "/docs",
+    href: "/dashboard/docs",
     icon: FileText,
   },
   // {
@@ -59,7 +59,7 @@ const navigationItems = [
   // },
   {
     title: "Team",
-    href: "/team",
+    href: "/dashboard/team",
     icon: Users,
   },
 ]
@@ -98,10 +98,7 @@ export function TopNavigation() {
   }
 
   const isActive = (href: string) => {
-    if (href === "/") {
-      return pathname === "/"
-    }
-    return pathname.startsWith(href)
+    return pathname === href;
   }
 
   const NavigationChips = ({ isMobile = false }) => (

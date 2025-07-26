@@ -12,14 +12,8 @@ body {
   }
 }
 
-
-
-
 @layer base {
   :root {
-  --dot-color: hsl(var(--muted));
-  --dot-size: 1px;
-  --dot-space: 16px;
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
