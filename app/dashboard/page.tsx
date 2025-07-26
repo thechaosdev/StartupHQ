@@ -13,7 +13,6 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useRouter } from "next/navigation"
 
-
 export default function Dashboard() {
   const [showCreateBoardModal, setShowCreateBoardModal] = useState(false)
   const { user } = useAuth()
@@ -22,7 +21,7 @@ export default function Dashboard() {
   const [users, setUsers] = useState<any[]>([])
   const [tasks, setTasks] = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [userPlan, setUserPlan] = useState<string>("free")
   const supabase = createClientComponentClient()
 
   useEffect(() => {
@@ -33,25 +32,44 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true)
-      const { data: userData } = await supabase.from("users").select("*")
-      setUsers(userData || [])
-      const today = new Date().toISOString().split("T")[0]
-      const { data: taskData } = await supabase
-        .from("tasks")
-        .select("*, assigned_user:users!tasks_assigned_to_fkey(id, name)")
-        .limit(3)
-      setTasks(taskData || [])
-      const { data: docData } = await supabase
-        .from("documents")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(5)
-      setDocuments(docData || [])
-      setLoading(false)
+      try {
+        if (user?.id) {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('plan')
+            .eq('id', user.id)
+            .single()
+          
+          if (!error && profile?.plan) {
+            setUserPlan(profile.plan)
+          }
+        }
+
+        const { data: userData } = await supabase.from("users").select("*")
+        setUsers(userData || [])
+        
+        const today = new Date().toISOString().split("T")[0]
+        const { data: taskData } = await supabase
+          .from("tasks")
+          .select("*, assigned_user:users!tasks_assigned_to_fkey(id, name)")
+          .limit(3)
+        setTasks(taskData || [])
+        
+        const { data: docData } = await supabase
+          .from("documents")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(5)
+        setDocuments(docData || [])
+      } catch (error) {
+        console.error("Error fetching data:", error)
+      }
     }
+
     fetchData()
-  }, [])
+  }, [user?.id])
+
+  const shouldShowStats = ['pro', 'enterprise'].includes(userPlan)
 
   return (
     <>
@@ -61,11 +79,13 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold">Good morning! 👋</h1>
-              <p className="text-sm md:text-base text-muted-foreground">Here's what's happening with your team today</p>
+              <p className="text-sm md:text-base text-muted-foreground">
+                Here's what's happening with your team today
+              </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button asChild size="sm" className="w-full sm:w-auto">
-                <Link href="/tasks">
+                <Link href="dashboard/tasks">
                   <Plus className="h-4 w-4 mr-2" />
                   <span className="hidden sm:inline">Quick Add Task</span>
                   <span className="sm:hidden">Add Task</span>
@@ -74,52 +94,55 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs md:text-sm font-medium">Team Members</CardTitle>
-                <Users className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl md:text-2xl font-bold">{users.length}</div>
-                <p className="text-xs text-muted-foreground">Total team members</p>
-                {/* <p className="text-xs text-muted-foreground">{users.filter((u) => u.status === "online").length} active today</p> */}
-              </CardContent>
-            </Card>
+          {shouldShowStats && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs md:text-sm font-medium">Team Members</CardTitle>
+                  <Users className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl md:text-2xl font-bold">{users.length}</div>
+                  <p className="text-xs text-muted-foreground">Total team members</p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs md:text-sm font-medium">Tasks Done</CardTitle>
-                <CheckSquare className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl md:text-2xl font-bold">{tasks.filter((t) => t.status === "done").length}</div>
-                <p className="text-xs text-muted-foreground">Today</p>
-              </CardContent>
-            </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs md:text-sm font-medium">Tasks Done</CardTitle>
+                  <CheckSquare className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl md:text-2xl font-bold">
+                    {tasks.filter((t) => t.status === "done").length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Today</p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs md:text-sm font-medium">Meetings</CardTitle>
-                <Calendar className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl md:text-2xl font-bold">-</div>
-                <p className="text-xs text-muted-foreground">No data</p>
-              </CardContent>
-            </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs md:text-sm font-medium">Meetings</CardTitle>
+                  <Calendar className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl md:text-2xl font-bold">-</div>
+                  <p className="text-xs text-muted-foreground">No data</p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs md:text-sm font-medium">Productivity</CardTitle>
-                <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl md:text-2xl font-bold">-</div>
-                <p className="text-xs text-muted-foreground">No data</p>
-              </CardContent>
-            </Card>
-          </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs md:text-sm font-medium">Productivity</CardTitle>
+                  <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl md:text-2xl font-bold">-</div>
+                  <p className="text-xs text-muted-foreground">No data</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <Card>
@@ -182,7 +205,9 @@ export default function Dashboard() {
                           {doc.created_at ? new Date(doc.created_at).toLocaleDateString() : ""}
                         </span>
                       </div>
-                      <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">{doc.content?.slice(0, 100)}...</p>
+                      <p className="text-xs md:text-sm text-muted-foreground line-clamp-2">
+                        {doc.content?.slice(0, 100)}...
+                      </p>
                     </div>
                   ))
                 )}
@@ -192,21 +217,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
-
-          {/* <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Calendar className="h-4 w-4 md:h-5 md:w-5" />
-                Upcoming Events
-              </CardTitle>
-              <CardDescription>Don't miss these important dates</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div className="text-muted-foreground">(Connect events table for real data)</div>
-              </div>
-            </CardContent>
-          </Card> */}
         </div>
 
         <CreateBoardModal open={showCreateBoardModal} onOpenChange={setShowCreateBoardModal} />

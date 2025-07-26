@@ -30,7 +30,7 @@ export function Footer() {
   </div>
 </div>
 
-          <div className="flex flex-wrap justify-center gap-6 md:gap-12">
+          {/* <div className="flex flex-wrap justify-center gap-6 md:gap-12">
             <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary">
               Terms & Conditions
             </Link>
@@ -43,7 +43,7 @@ export function Footer() {
             <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary">
               Privacy Policy
             </Link>
-          </div>
+          </div> */}
 
           <div className="w-full max-w-md border-t border-gray-200"></div>
 

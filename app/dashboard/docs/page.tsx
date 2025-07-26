@@ -5,66 +5,38 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, FileText, Search, Calendar, Users, BookOpen, Menu } from "lucide-react"
+import { Plus, FileText, Search, Calendar as CalendarIcon, Users, BookOpen, Menu, Trash2 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { TopNavigation } from "@/components/top-navigation"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { useAuth } from "@/lib/hooks/useAuth";
-import { useRouter } from "next/navigation";
-
-const mockDocs = [
-  {
-    id: 1,
-    title: "Daily Standup - Jan 8, 2024",
-    type: "Meeting Notes",
-    folder: "Meetings",
-    lastModified: "2024-01-08",
-    author: "Alice Johnson",
-    content:
-      "## Attendees\n- Alice Johnson\n- Bob Smith\n- Carol Davis\n\n## Yesterday's Progress\n- Completed user authentication flow\n- Fixed responsive design issues\n\n## Today's Goals\n- Start dashboard implementation\n- Review design mockups",
-  },
-  {
-    id: 2,
-    title: "Q1 Product Roadmap",
-    type: "Roadmap",
-    folder: "Planning",
-    lastModified: "2024-01-07",
-    author: "Bob Smith",
-    content:
-      "# Q1 2024 Product Roadmap\n\n## Key Features\n1. User Dashboard\n2. Team Collaboration Tools\n3. Mobile App MVP\n\n## Timeline\n- January: Core features\n- February: Testing & refinement\n- March: Launch preparation",
-  },
-  {
-    id: 3,
-    title: "API Documentation",
-    type: "Documentation",
-    folder: "Technical",
-    lastModified: "2024-01-06",
-    author: "Carol Davis",
-    content:
-      "# API Documentation\n\n## Authentication\nAll API requests require authentication via JWT tokens.\n\n## Endpoints\n\n### GET /api/users\nReturns list of users\n\n### POST /api/tasks\nCreates a new task",
-  },
-]
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { useRouter } from "next/navigation"
+import { format } from "date-fns"
 
 const templates = [
   { id: "meeting", name: "Meeting Notes", icon: Users },
-  { id: "standup", name: "Daily Standup", icon: Calendar },
+  { id: "standup", name: "Daily Standup", icon: CalendarIcon },
   { id: "roadmap", name: "Roadmap", icon: BookOpen },
 ]
 
 export default function DocsPage() {
   const [docs, setDocs] = useState<any[]>([])
-  const [selectedDoc, setSelectedDoc] = useState<(typeof mockDocs)[0] | null>(null)
+  const [selectedDoc, setSelectedDoc] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
-  const supabase = createClientComponentClient();
-  const { user, loading: authLoading } = useAuth();
+  const [userPlan, setUserPlan] = useState("free")
+  const [longPressDocId, setLongPressDocId] = useState<string | null>(null)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const supabase = createClientComponentClient()
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
 
   const filteredDocs = docs.filter(
     (doc) =>
@@ -73,19 +45,43 @@ export default function DocsPage() {
   )
 
   useEffect(() => {
-    const fetchDocs = async () => {
-      setLoading(true);
+    const fetchData = async () => {
+      setLoading(true)
+      
+      // Fetch user plan
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('plan')
+          .eq('id', user.id)
+          .single()
+        setUserPlan(profile?.plan || "free")
+      }
+
+      // Fetch documents
       const { data, error } = await supabase
         .from("documents")
         .select("*")
-        .order("created_at", { ascending: false });
-      if (!error && data) setDocs(data);
-      setLoading(false);
-    };
-    fetchDocs();
-  }, []);
+        .order("created_at", { ascending: false })
+      
+      if (!error && data) {
+        // Format dates for display
+        const formattedDocs = data.map(doc => ({
+          ...doc,
+          formattedDate: format(new Date(doc.updated_at || doc.created_at), 'MMM dd, yyyy')
+        }))
+        setDocs(formattedDocs)
+      }
+      setLoading(false)
+    }
+    fetchData()
+  }, [user?.id])
 
-  const handleDocSelect = (doc: (typeof mockDocs)[0]) => {
+  // Check if user has reached document limit
+  const userDocCount = docs.filter(doc => doc.created_by === user?.id).length
+  const isFreePlanLimitReached = userPlan === "free" && userDocCount >= 5
+
+  const handleDocSelect = (doc: any) => {
     setSelectedDoc(doc)
     setIsMobileMenuOpen(false)
   }
@@ -105,15 +101,19 @@ export default function DocsPage() {
         })
         .eq("id", selectedDoc.id)
         .select()
-        .single();
+        .single()
 
       if (!error && data) {
+        const updatedDoc = {
+          ...data,
+          formattedDate: format(new Date(), 'MMM dd, yyyy')
+        }
         const updatedDocs = docs.map((doc) =>
-          doc.id === selectedDoc.id ? data : doc
-        );
-        setDocs(updatedDocs);
-        setSelectedDoc(data);
-        setIsEditing(false);
+          doc.id === selectedDoc.id ? updatedDoc : doc
+        )
+        setDocs(updatedDocs)
+        setSelectedDoc(updatedDoc)
+        setIsEditing(false)
       }
     }
   }
@@ -121,6 +121,29 @@ export default function DocsPage() {
   const handleCancelEdit = () => {
     setIsEditing(false)
     setEditContent("")
+  }
+
+  const handleDeleteDocument = async () => {
+    if (!longPressDocId) return
+    
+    try {
+      await supabase
+        .from("documents")
+        .delete()
+        .eq("id", longPressDocId)
+
+      setDocs(docs.filter(doc => doc.id !== longPressDocId))
+      
+      // If the deleted doc was currently selected, clear selection
+      if (selectedDoc?.id === longPressDocId) {
+        setSelectedDoc(null)
+      }
+      
+      setLongPressDocId(null)
+      setShowDeleteDialog(false)
+    } catch (err) {
+      console.error("Error deleting document:", err)
+    }
   }
 
   const CreateDocumentForm = ({ onSuccess, onCancel }: { onSuccess: (doc: any) => void; onCancel: () => void }) => {
@@ -159,10 +182,14 @@ export default function DocsPage() {
           created_by: user?.id,
         })
         .select()
-        .single();
+        .single()
 
       if (!error && data) {
-        onSuccess(data);
+        const formattedDoc = {
+          ...data,
+          formattedDate: format(new Date(), 'MMM dd, yyyy')
+        }
+        onSuccess(formattedDoc)
       }
 
       setFormData({
@@ -238,31 +265,87 @@ export default function DocsPage() {
     )
   }
 
+  const DocumentItem = ({ doc }: { doc: any }) => {
+    let pressTimer: NodeJS.Timeout
+
+    const startPress = () => {
+      pressTimer = setTimeout(() => {
+        setLongPressDocId(doc.id)
+        setShowDeleteDialog(true)
+      }, 800) // 800ms for long press
+    }
+
+    const endPress = () => {
+      clearTimeout(pressTimer)
+    }
+
+    return (
+      <button
+        onClick={() => handleDocSelect(doc)}
+        onTouchStart={startPress}
+        onTouchEnd={endPress}
+        onMouseDown={startPress}
+        onMouseUp={endPress}
+        onMouseLeave={endPress}
+        className={`w-full text-left p-3 rounded-md hover:bg-accent transition-colors ${
+          selectedDoc?.id === doc.id ? "bg-accent" : ""
+        }`}
+      >
+        <div className="flex items-start gap-2">
+          <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm truncate">{doc.title}</p>
+            <div className="flex flex-wrap items-center gap-1 mt-1">
+              <Badge variant="secondary" className="text-xs">
+                {doc.type || "Document"}
+              </Badge>
+              <span className="text-xs text-muted-foreground">{doc.folder}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Modified {doc.formattedDate}
+            </p>
+          </div>
+        </div>
+      </button>
+    )
+  }
+
   const DocumentSidebar = () => (
     <div className="h-full flex flex-col">
       <div className="p-3 md:p-4 border-b space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-sm md:text-base">Documents</h2>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="w-[95vw] max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create New Document</DialogTitle>
-              </DialogHeader>
-              <CreateDocumentForm
-                onSuccess={(doc) => {
-                  setDocs([doc, ...docs])
-                  setSelectedDoc(doc)
-                  setIsCreateDialogOpen(false)
-                }}
-                onCancel={() => setIsCreateDialogOpen(false)}
-              />
-            </DialogContent>
-          </Dialog>
+          
+          {!isFreePlanLimitReached ? (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="w-[95vw] max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Create New Document</DialogTitle>
+                </DialogHeader>
+                <CreateDocumentForm
+                  onSuccess={(doc) => {
+                    setDocs([doc, ...docs])
+                    setSelectedDoc(doc)
+                    setIsCreateDialogOpen(false)
+                  }}
+                  onCancel={() => setIsCreateDialogOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => router.push('/billing')}
+            >
+              Upgrade Plan
+            </Button>
+          )}
         </div>
 
         <div className="relative">
@@ -279,29 +362,7 @@ export default function DocsPage() {
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
           {filteredDocs.map((doc) => (
-            <button
-              key={doc.id}
-              onClick={() => handleDocSelect(doc)}
-              className={`w-full text-left p-3 rounded-md hover:bg-accent transition-colors ${
-                selectedDoc?.id === doc.id ? "bg-accent" : ""
-              }`}
-            >
-              <div className="flex items-start gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{doc.title}</p>
-                  <div className="flex flex-wrap items-center gap-1 mt-1">
-                    <Badge variant="secondary" className="text-xs">
-                      {doc.type || "Document"}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{doc.folder}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Modified {new Date(doc.lastModified).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-            </button>
+            <DocumentItem key={doc.id} doc={doc} />
           ))}
         </div>
       </ScrollArea>
@@ -347,9 +408,9 @@ export default function DocsPage() {
                       <div className="min-w-0">
                         <h1 className="text-lg md:text-xl font-semibold truncate">{selectedDoc.title}</h1>
                         <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground mt-1">
-                          <span>By {selectedDoc.author}</span>
+                          <span>By {selectedDoc.author || "You"}</span>
                           <span className="hidden sm:inline">
-                            Modified {new Date(selectedDoc.lastModified).toLocaleDateString()}
+                            Modified {selectedDoc.formattedDate}
                           </span>
                           <Badge variant="outline" className="text-xs">
                             {selectedDoc.folder}
@@ -453,35 +514,48 @@ export default function DocsPage() {
                 <div className="text-center space-y-4 max-w-sm">
                   <FileText className="h-12 w-12 text-muted-foreground mx-auto" />
                   <div>
-                    <h2 className="text-lg md:text-xl font-semibold">No document selected</h2>
+                    <h2 className="text-lg md:text-xl font-semibold">
+                      {isFreePlanLimitReached ? "Document Limit Reached" : "No document selected"}
+                    </h2>
                     <p className="text-sm md:text-base text-muted-foreground">
-                      Choose a document from the sidebar to view its content
+                      {isFreePlanLimitReached 
+                        ? "You've reached your document limit on the free plan."
+                        : "Choose a document from the sidebar to view its content"}
                     </p>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-2 ">
-                    <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                      <DialogTrigger asChild>
-                        <div className="flex justify-center w-full">
-                          <Button className="w-full sm:w-auto max-w-xs">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create New Document
-                          </Button>
-                        </div>
-                      </DialogTrigger>
-                      <DialogContent className="w-[95vw] max-w-2xl">
-                        <DialogHeader>
-                          <DialogTitle>Create New Document</DialogTitle>
-                        </DialogHeader>
-                        <CreateDocumentForm
-                          onSuccess={(doc) => {
-                            setDocs([doc, ...docs])
-                            setSelectedDoc(doc)
-                            setIsCreateDialogOpen(false)
-                          }}
-                          onCancel={() => setIsCreateDialogOpen(false)}
-                        />
-                      </DialogContent>
-                    </Dialog>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {!isFreePlanLimitReached ? (
+                      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                        <DialogTrigger asChild>
+                          <div className="flex justify-center w-full">
+                            <Button className="w-full sm:w-auto max-w-xs">
+                              <Plus className="h-4 w-4 mr-2" />
+                              Create New Document
+                            </Button>
+                          </div>
+                        </DialogTrigger>
+                        <DialogContent className="w-[95vw] max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>Create New Document</DialogTitle>
+                          </DialogHeader>
+                          <CreateDocumentForm
+                            onSuccess={(doc) => {
+                              setDocs([doc, ...docs])
+                              setSelectedDoc(doc)
+                              setIsCreateDialogOpen(false)
+                            }}
+                            onCancel={() => setIsCreateDialogOpen(false)}
+                          />
+                        </DialogContent>
+                      </Dialog>
+                    ) : (
+                      <Button 
+                        className="w-full sm:w-auto max-w-xs"
+                        onClick={() => router.push('/billing')}
+                      >
+                        Upgrade Plan
+                      </Button>
+                    )}
                     <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                       <SheetTrigger asChild>
                         <Button variant="outline" className="w-full sm:w-auto md:hidden bg-transparent">
@@ -497,6 +571,27 @@ export default function DocsPage() {
           </div>
         </div>
       </main>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Delete Document
+            </DialogTitle>
+          </DialogHeader>
+          <p>Are you sure you want to delete this document? This action cannot be undone.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteDocument}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

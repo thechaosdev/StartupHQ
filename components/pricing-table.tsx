@@ -84,11 +84,11 @@ const PricingPlans: React.FC = () => {
             <div
               key={plan.name}
               className={`relative p-8 bg-white border rounded-lg shadow-sm flex flex-col ${
-                plan.featured ? 'border-indigo-500 ring-2 ring-indigo-500' : 'border-gray-200'
+                plan.featured ? 'border-indigo-500 ring-2 ring-blue-500' : 'border-gray-200'
               }`}
             >
               {plan.featured && (
-                <div className="absolute top-0 py-1.5 px-4 bg-indigo-500 rounded-full text-xs font-semibold uppercase tracking-wide text-white transform -translate-y-1/2">
+                <div className="absolute top-0 py-1.5 px-4 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full text-xs font-semibold uppercase tracking-wide text-white transform -translate-y-1/2">
                   Most popular
                 </div>
               )}
@@ -124,8 +124,8 @@ const PricingPlans: React.FC = () => {
                 href="#"
                 className={`mt-8 block w-full py-3 px-6 border border-transparent rounded-md text-center font-medium ${
                   plan.featured
-                    ? 'bg-indigo-500 text-white hover:bg-indigo-600'
-                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                    ? 'bg-gradient-to-b from-blue-500 to-blue-600 text-white hover:bg-indigo-600'
+                    : 'bg-indigo-50 text-blue-500 hover:bg-indigo-100'
                 }`}
               >
                 {plan.ctaText}
