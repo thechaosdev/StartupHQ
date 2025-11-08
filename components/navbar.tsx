@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import Image from 'next/image';
-import logo from "@/assets/log.png"
+import logo from "@/assets/100xbrain.png"
 import { Button } from "@/components/ui/button";
-import { ModeToggle } from "@/components/mode-toggle";
 
 export function Navbar() {
 
@@ -16,15 +15,14 @@ export function Navbar() {
               <Link href="/" className="flex items-center space-x-2">
       <Image 
     src={logo}
-    alt="Startup HQ Logo"
-    width={50}
-    height={50}
-    className="rounded-lg"
+    alt="100xbrain Logo"
+    width={60}
+    height={60}
   />
         </Link>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Startup HQ</h1>
-              <p className="text-sm text-gray-500">Manage startup efficently</p>
+              <h1 className="text-3xl mt-2 font-bold text-gray-900">100xbrain.</h1>
+              {/* <p className="text-sm text-gray-500">second brain for your startups.</p> */}
             </div>
           </div>
 
